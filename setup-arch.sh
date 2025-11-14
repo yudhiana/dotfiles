@@ -49,7 +49,7 @@ SSH_KEY="$HOME/.ssh/${SSH_KEY_NAME}_id_ed25519"
 # ----------------------------------------------------------
 # 2. Install GitHub CLI
 # ----------------------------------------------------------
-echo "[1/16] Checking GitHub CLI..."
+echo "[1/22] Checking GitHub CLI..."
 if ! command -v gh &> /dev/null; then
     $SUDO pacman -Syu --noconfirm
     $SUDO pacman -S --noconfirm github-cli
@@ -60,14 +60,14 @@ fi
 # ----------------------------------------------------------
 # 3. GitHub login
 # ----------------------------------------------------------
-echo "[2/16] Logging in to GitHub using PAT..."
+echo "[2/22] Logging in to GitHub using PAT..."
 echo "$GITHUB_PAT" | gh auth login --with-token
 echo "→ GitHub login OK."
 
 # ----------------------------------------------------------
 # 4. Generate SSH key
 # ----------------------------------------------------------
-echo "[3/16] Generating SSH key: $SSH_KEY_NAME"
+echo "[3/22] Generating SSH key: $SSH_KEY_NAME"
 rm -f "$SSH_KEY" "$SSH_KEY.pub" 2>/dev/null || true
 ssh-keygen -t ed25519 -C "$SSH_KEY_NAME" -f "$SSH_KEY" -N ""
 echo "→ SSH key created."
@@ -75,7 +75,7 @@ echo "→ SSH key created."
 # ----------------------------------------------------------
 # 5. SSH agent
 # ----------------------------------------------------------
-echo "[4/16] Starting ssh-agent..."
+echo "[4/22] Starting ssh-agent..."
 if ! pgrep -u "$USER" ssh-agent >/dev/null; then
     eval "$(ssh-agent -s)"
 fi
@@ -85,21 +85,21 @@ echo "→ SSH key loaded."
 # ----------------------------------------------------------
 # 6. Upload SSH key
 # ----------------------------------------------------------
-echo "[5/16] Uploading key to GitHub..."
+echo "[5/22] Uploading key to GitHub..."
 gh ssh-key add "$SSH_KEY.pub" --title "$SSH_KEY_NAME" --type authentication
 echo "→ Key uploaded."
 
 # ----------------------------------------------------------
 # 7. Install Docker
 # ----------------------------------------------------------
-echo "[6/16] Installing Docker..."
+echo "[6/22] Installing Docker..."
 $SUDO pacman -S --noconfirm docker
 echo "→ Docker installed."
 
 # ----------------------------------------------------------
 # 8. Install Docker Compose
 # ----------------------------------------------------------
-echo "[7/16] Installing Docker Compose..."
+echo "[7/22] Installing Docker Compose..."
 $SUDO pacman -S --noconfirm docker-compose || \
 $SUDO pacman -S --noconfirm docker-compose-plugin
 echo "→ Docker Compose installed."
@@ -107,7 +107,7 @@ echo "→ Docker Compose installed."
 # ----------------------------------------------------------
 # 9. Enable Docker + add group
 # ----------------------------------------------------------
-echo "[8/16] Enabling Docker service..."
+echo "[8/22] Enabling Docker service..."
 $SUDO systemctl enable docker
 $SUDO systemctl start docker
 $SUDO usermod -aG docker "$USER"
@@ -116,7 +116,7 @@ echo "→ Docker running."
 # ----------------------------------------------------------
 # 10. Install GitAhead (AUR)
 # ----------------------------------------------------------
-echo "[9/16] Installing GitAhead..."
+echo "[9/22] Installing GitAhead..."
 if ! command -v gitahead &>/dev/null; then
     $SUDO pamac update --no-confirm || true
     $SUDO pamac install --no-confirm gitahead-bin
@@ -127,7 +127,7 @@ fi
 # ----------------------------------------------------------
 # 11. Install Beekeeper Studio (AUR)
 # ----------------------------------------------------------
-echo "[10/16] Installing Beekeeper Studio..."
+echo "[10/22] Installing Beekeeper Studio..."
 if ! command -v beekeeper-studio &>/dev/null; then
     $SUDO pamac install --no-confirm beekeeper-studio-bin
 else
@@ -137,7 +137,7 @@ fi
 # ----------------------------------------------------------
 # 12. Install DBeaver CE
 # ----------------------------------------------------------
-echo "[11/16] Installing DBeaver CE..."
+echo "[11/22] Installing DBeaver CE..."
 if ! command -v dbeaver &>/dev/null; then
     $SUDO pacman -S --noconfirm dbeaver
 else
@@ -147,7 +147,7 @@ fi
 # ----------------------------------------------------------
 # 13. Install VSCode (AUR)
 # ----------------------------------------------------------
-echo "[12/16] Installing Visual Studio Code..."
+echo "[12/22] Installing Visual Studio Code..."
 if ! command -v code &>/dev/null; then
     $SUDO pamac install --no-confirm visual-studio-code-bin
 else
@@ -157,7 +157,7 @@ fi
 # ----------------------------------------------------------
 # 14. Install Google Chrome (AUR)
 # ----------------------------------------------------------
-echo "[13/16] Installing Google Chrome..."
+echo "[13/22] Installing Google Chrome..."
 if ! command -v google-chrome &>/dev/null; then
     $SUDO pamac install --no-confirm google-chrome
 else
@@ -167,7 +167,7 @@ fi
 # ----------------------------------------------------------
 # 15. Install MongoDB Compass (AUR)
 # ----------------------------------------------------------
-echo "[14/16] Installing MongoDB Compass..."
+echo "[14/22] Installing MongoDB Compass..."
 if ! command -v mongodb-compass &>/dev/null; then
     $SUDO pamac install --no-confirm mongodb-compass
 else
@@ -177,7 +177,7 @@ fi
 # ----------------------------------------------------------
 # 16. Install Postman (AUR)
 # ----------------------------------------------------------
-echo "[15/16] Installing Postman..."
+echo "[15/22] Installing Postman..."
 if ! command -v postman &>/dev/null; then
     $SUDO pamac install --no-confirm postman-bin
 else
@@ -188,7 +188,7 @@ fi
 # ----------------------------------------------------------
 # 17. Install Golang
 # ----------------------------------------------------------
-echo "[16/17] Installing Golang..."
+echo "[16/22] Installing Golang..."
 if ! command -v go &>/dev/null; then
     $SUDO pacman -S --noconfirm go
 else
