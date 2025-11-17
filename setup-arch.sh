@@ -179,15 +179,22 @@ else
     fi
 fi
 
-# # ----------------------------------------------------------
-# # 11. Install GitAhead (AUR)
-# # ----------------------------------------------------------
-# echo "[10/23] Installing GitAhead..."
-# if ! command -v gitahead &>/dev/null; then
-#     sudo pamac install --no-confirm gitahead-bin
-# else
-#     echo "→ GitAhead already installed."
-# fi
+# ----------------------------------------------------------
+# 11. Install Ferdium (Flatpak)
+# ----------------------------------------------------------
+echo "[10/23] Installing Ferdium..."
+if ! flatpak list | grep -q 'org.ferdium.Ferdium'; then
+    echo "→ Ferdium not installed. Installing..."
+    sudo flatpak install --assumeyes flathub org.ferdium.Ferdium
+    if flatpak list | grep -q 'org.ferdium.Ferdium'; then
+        echo "→ Ferdium successfully installed."
+    else
+        echo "→ Failed to install Ferdium."
+        exit 1
+    fi
+else
+    echo "→ Ferdium already installed."
+fi
 
 # ----------------------------------------------------------
 # 12. Install Beekeeper Studio (AUR)
@@ -382,6 +389,22 @@ else
     echo "→ SQLite already installed."
 fi
 
+# ----------------------------------------------------------
+# 23. Install Flameshot
+# ----------------------------------------------------------
+echo "[23/23] Installing Flameshot..."
+if ! flatpak list | grep -q 'org.flameshot.Flameshot'; then
+    echo "→ Flameshot not installed. Installing..."
+    sudo flatpak install --assumeyes flathub org.flameshot.Flameshot
+    if flatpak list | grep -q 'org.flameshot.Flameshot'; then
+        echo "→ Flameshot successfully installed."
+    else
+        echo "→ Failed to install Flameshot."
+        exit 1
+    fi
+else
+    echo "→ Flameshot already installed."
+fi
 
 echo ""
 echo "===================================================================="
