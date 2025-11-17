@@ -199,6 +199,7 @@ fi
 # ----------------------------------------------------------
 # 12. Install Beekeeper Studio (AUR)
 # ----------------------------------------------------------
+echo "[11/23] Installing beekeepper-studio..."
 if ! pacman -Q beekeeper-studio-bin &>/dev/null; then
     echo "→ Beekeeper Studio not installed. Installing..."
     sudo pamac install --no-confirm beekeeper-studio-bin
