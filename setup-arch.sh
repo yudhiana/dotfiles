@@ -6,6 +6,9 @@ echo "     NON-INTERACTIVE • READ FROM .env • FEED SUDO PASSWORD"
 echo "===================================================================="
 echo ""
 
+# Ask for sudo once at start
+sudo -v
+
 set -e
 set -o pipefail
 
@@ -23,13 +26,11 @@ GITHUB_PAT=
 # SSH key name (required)
 SSH_KEY_NAME=my-manjaro-ssh-key
 
-# Sudo password (required)
-SUDO_PASSWORD=
 EOF
 
     echo ""
     echo "Default .env created."
-    echo "Fill GITHUB_PAT, SSH_KEY_NAME, and SUDO_PASSWORD before re-running."
+    echo "Fill GITHUB_PAT, SSH_KEY_NAME before re-running."
     exit 1
 fi
 
@@ -41,9 +42,7 @@ source "$ENV_FILE"
 
 [ -z "$GITHUB_PAT" ] && { echo "ERROR: GITHUB_PAT missing"; exit 1; }
 [ -z "$SSH_KEY_NAME" ] && { echo "ERROR: SSH_KEY_NAME missing"; exit 1; }
-[ -z "$SUDO_PASSWORD" ] && { echo "ERROR: SUDO_PASSWORD missing"; exit 1; }
 
-SUDO="echo \"$SUDO_PASSWORD\" | sudo -S"
 SSH_KEY="$HOME/.ssh/${SSH_KEY_NAME}_id_ed25519"
 
 # ----------------------------------------------------------
@@ -58,15 +57,15 @@ fi
 echo "→ pamac OK."
 
 # Ensure AUR enabled
-$SUDO sed -i 's/#EnableAUR/EnableAUR/' /etc/pamac.conf
+sudo sed -i 's/#EnableAUR/EnableAUR/' /etc/pamac.conf
 
 # ----------------------------------------------------------
 # 3. Install GitHub CLI
 # ----------------------------------------------------------
 echo "[2/23] Checking GitHub CLI..."
 if ! command -v gh &>/dev/null; then
-    $SUDO pacman -Syu --noconfirm
-    $SUDO pacman -S --noconfirm github-cli
+    sudo pacman -Syu --noconfirm
+    sudo pacman -S --noconfirm github-cli
 else
     echo "→ GitHub CLI already installed."
 fi
@@ -75,79 +74,150 @@ fi
 # 4. GitHub login
 # ----------------------------------------------------------
 echo "[3/23] GitHub login..."
-echo "$GITHUB_PAT" | gh auth login --with-token
-echo "→ GitHub login OK."
+if gh auth status >/dev/null 2>&1; then
+    echo "→ GH CLI already Logged in github"
+else
+    echo "starting to login"
+    echo "$GITHUB_PAT" | gh auth login --with-token
+    echo "→ GitHub login successfully."
+    exit 1
+fi
 
 # ----------------------------------------------------------
 # 5. Generate SSH Key
 # ----------------------------------------------------------
 echo "[4/23] Generating SSH key..."
-rm -f "$SSH_KEY" "$SSH_KEY.pub" || true
-ssh-keygen -t ed25519 -C "$SSH_KEY_NAME" -f "$SSH_KEY" -N ""
-echo "→ SSH key created."
+# Check BEFORE generating or deleting
+SKIP_SSH_SETUP=false
+if [[ -f "$SSH_KEY" || -f "$SSH_KEY.pub" ]]; then
+    echo "⚠  Existing SSH key found:"
+    [[ -f "$SSH_KEY" ]] && echo "  - $SSH_KEY"
+    [[ -f "$SSH_KEY.pub" ]] && echo "  - $SSH_KEY.pub"
+    SKIP_SSH_SETUP=true
+else
+    ssh-keygen -t ed25519 -C "$SSH_KEY_NAME" -f "$SSH_KEY" -N ""
+    echo "→ SSH key created."
+fi
 
 # ----------------------------------------------------------
 # 6. SSH Agent
 # ----------------------------------------------------------
 echo "[5/23] Starting ssh-agent..."
-if ! pgrep -u "$USER" ssh-agent >/dev/null; then
-    eval "$(ssh-agent -s)"
+if [ "$SKIP_SSH_SETUP" = false ]; then
+    if ! pgrep -u "$USER" ssh-agent >/dev/null; then
+        eval "$(ssh-agent -s)"
+    fi
+    
+    ssh-add "$SSH_KEY"
+else
+    echo "→ ssh-agent skipped"
 fi
-ssh-add "$SSH_KEY"
 
 # ----------------------------------------------------------
 # 7. Upload SSH key to GitHub
 # ----------------------------------------------------------
 echo "[6/23] Uploading SSH key..."
-gh ssh-key add "$SSH_KEY.pub" --title "$SSH_KEY_NAME" --type authentication
+if [ "$SKIP_SSH_SETUP" = false ]; then
+    gh ssh-key add "$SSH_KEY.pub" --title "$SSH_KEY_NAME" --type authentication
+else
+    echo "→ uploading ssh-key skipped"
+fi
 
 # ----------------------------------------------------------
 # 8. Install Docker
 # ----------------------------------------------------------
+
 echo "[7/23] Installing Docker..."
-$SUDO pacman -S --noconfirm docker
+if docker --version >/dev/null 2>&1; then
+    echo "→ docker install skipped"
+else
+    sudo pacman -S --noconfirm docker
+    INSTALL_EXIT_CODE=$?
+
+    # Chek instalation already successed
+    if [ $INSTALL_EXIT_CODE -ne 0 ]; then
+        echo "docker instalation failure."
+        exit 1
+    fi 
+fi
 
 # ----------------------------------------------------------
 # 9. Install Docker Compose plugin
 # ----------------------------------------------------------
 echo "[8/23] Installing Docker Compose..."
-$SUDO pacman -S --noconfirm docker-compose || \
-$SUDO pacman -S --noconfirm docker-compose-plugin
+if docker compose version >/dev/null 2>&1; then
+    echo "→ docker compose install skipped"
+else
+   sudo pacman -S --noconfirm docker-compose || \
+   sudo pacman -S --noconfirm docker-compose-plugin
+   INSTALL_EXIT_CODE=$?
+
+    # Chek instalation already successed
+    if [ $INSTALL_EXIT_CODE -ne 0 ]; then
+        echo "docker compose instalation failure."
+        exit 1
+    fi 
+fi
 
 # ----------------------------------------------------------
 # 10. Enable Docker service
 # ----------------------------------------------------------
 echo "[9/23] Enabling Docker..."
-$SUDO systemctl enable docker
-$SUDO systemctl start docker
-$SUDO usermod -aG docker "$USER"
-
-# ----------------------------------------------------------
-# 11. Install GitAhead (AUR)
-# ----------------------------------------------------------
-echo "[10/23] Installing GitAhead..."
-if ! command -v gitahead &>/dev/null; then
-    $SUDO pamac install --no-confirm gitahead-bin
+if systemctl is-enabled --quiet docker; then
+    echo "→ Docker service already enabled."
 else
-    echo "→ GitAhead already installed."
+    
+    # Enable Docker service
+    sudo systemctl enable --now docker
+    
+    # Check enabled succesfully
+    if systemctl is-enabled --quiet docker; then
+        echo "→ Docker service successfully enabled."
+    else
+        echo "→ Docker service failed enable process"
+        exit 1
+    fi
 fi
+
+# # ----------------------------------------------------------
+# # 11. Install GitAhead (AUR)
+# # ----------------------------------------------------------
+# echo "[10/23] Installing GitAhead..."
+# if ! command -v gitahead &>/dev/null; then
+#     sudo pamac install --no-confirm gitahead-bin
+# else
+#     echo "→ GitAhead already installed."
+# fi
 
 # ----------------------------------------------------------
 # 12. Install Beekeeper Studio (AUR)
 # ----------------------------------------------------------
-echo "[11/23] Installing Beekeeper Studio..."
-if ! command -v beekeeper-studio &>/dev/null; then
-    $SUDO pamac install --no-confirm beekeeper-studio-bin
+if ! pacman -Q beekeeper-studio-bin &>/dev/null; then
+    echo "→ Beekeeper Studio not installed. Installing..."
+    sudo pamac install --no-confirm beekeeper-studio-bin
+    if pacman -Q beekeeper-studio-bin &>/dev/null; then
+        echo "→ Beekeeper Studio successfully installed."
+    else
+        echo "→ Failed to install Beekeeper Studio."
+        exit 1
+    fi
 else
     echo "→ Beekeeper Studio already installed."
 fi
+
 
 # ----------------------------------------------------------
 # 13. Install DBeaver CE
 # ----------------------------------------------------------
 echo "[12/23] Installing DBeaver CE..."
 if ! command -v dbeaver &>/dev/null; then
-    $SUDO pacman -S --noconfirm dbeaver
+    sudo pacman -S --noconfirm dbeaver
+    if command -v dbeaver &>/dev/null; then
+        echo "→ DBeaver successfully installed."
+    else
+        echo "→ Failed to install DBeaver."
+        exit 1
+    fi
 else
     echo "→ DBeaver already installed."
 fi
@@ -157,7 +227,13 @@ fi
 # ----------------------------------------------------------
 echo "[13/23] Installing VSCode..."
 if ! command -v code &>/dev/null; then
-    $SUDO pamac install --no-confirm visual-studio-code-bin
+    sudo pamac install --no-confirm visual-studio-code-bin
+    if command -v code &>/dev/null; then
+        echo "→ Visual Studio Code successfully installed."
+    else
+        echo "→ Failed to install Visual Studio Code."
+        exit 1
+    fi
 else
     echo "→ VSCode already installed."
 fi
@@ -166,10 +242,16 @@ fi
 # 15. Install Google Chrome (AUR)
 # ----------------------------------------------------------
 echo "[14/23] Installing Google Chrome..."
-if ! command -v google-chrome &>/dev/null; then
-    $SUDO pamac install --no-confirm google-chrome
+if ! command -v google-chrome-stable &>/dev/null; then
+    sudo pamac install --no-confirm google-chrome
+    if command -v google-chrome-stable &>/dev/null; then
+        echo "→ Google Chrome successfully installed."
+    else
+        echo "→ Failed to install Google Chrome."
+        exit 1
+    fi
 else
-    echo "→ Chrome already installed."
+    echo "→ Google Chrome already installed."
 fi
 
 # ----------------------------------------------------------
@@ -177,9 +259,15 @@ fi
 # ----------------------------------------------------------
 echo "[15/23] Installing MongoDB Compass..."
 if ! command -v mongodb-compass &>/dev/null; then
-    $SUDO pamac install --no-confirm mongodb-compass
+    sudo pamac install --no-confirm mongodb-compass
+    if command -v mongodb-compass &>/dev/null; then
+        echo "→ MongoDB Compass successfully installed."
+    else
+        echo "→ Failed to install MongoDB Compass."
+        exit 1
+    fi
 else
-    echo "→ Compass already installed."
+    echo "→ MongoDB Compass already installed."
 fi
 
 # ----------------------------------------------------------
@@ -187,7 +275,13 @@ fi
 # ----------------------------------------------------------
 echo "[16/23] Installing Postman..."
 if ! command -v postman &>/dev/null; then
-    $SUDO pamac install --no-confirm postman-bin
+    sudo pamac install --no-confirm postman-bin
+    if command -v postman &>/dev/null; then
+        echo "→ Postman successfully installed."
+    else
+        echo "→ Failed to install Postman."
+        exit 1
+    fi
 else
     echo "→ Postman already installed."
 fi
@@ -197,7 +291,13 @@ fi
 # ----------------------------------------------------------
 echo "[17/23] Installing Golang..."
 if ! command -v go &>/dev/null; then
-    $SUDO pacman -S --noconfirm go
+    sudo pacman -S --noconfirm go
+    if command -v go &>/dev/null; then
+        echo "→ Go successfully installed."
+    else
+        echo "→ Failed to install Go."
+        exit 1
+    fi
 else
     echo "→ Go already installed."
 fi
@@ -207,7 +307,13 @@ fi
 # ----------------------------------------------------------
 echo "[18/23] Installing PostgreSQL client..."
 if ! command -v psql &>/dev/null; then
-    $SUDO pacman -S --noconfirm postgresql-libs
+    sudo pacman -S --noconfirm postgresql-libs
+    if command -v psql &>/dev/null; then
+        echo "→ PostgreSQL client successfully installed."
+    else
+        echo "→ Failed to install PostgreSQL client."
+        exit 1
+    fi
 else
     echo "→ PostgreSQL client already installed."
 fi
@@ -217,7 +323,13 @@ fi
 # ----------------------------------------------------------
 echo "[19/23] Installing MariaDB/MySQL client..."
 if ! command -v mysql &>/dev/null; then
-    $SUDO pacman -S --noconfirm mariadb-clients
+    sudo pacman -S --noconfirm mariadb-clients
+    if command -v mysql &>/dev/null; then
+        echo "→ MariaDB/MySQL client successfully installed."
+    else
+        echo "→ Failed to install MariaDB/MySQL client."
+        exit 1
+    fi
 else
     echo "→ MariaDB/MySQL client already installed."
 fi
@@ -227,7 +339,13 @@ fi
 # ----------------------------------------------------------
 echo "[20/23] Installing Redis client..."
 if ! command -v redis-cli &>/dev/null; then
-    $SUDO pacman -S --noconfirm redis
+    sudo pacman -S --noconfirm redis
+    if command -v redis-cli &>/dev/null; then
+        echo "→ Redis client successfully installed."
+    else
+        echo "→ Failed to install Redis client."
+        exit 1
+    fi
 else
     echo "→ Redis client already installed."
 fi
@@ -237,9 +355,15 @@ fi
 # ----------------------------------------------------------
 echo "[21/23] Installing MongoDB Shell..."
 if ! command -v mongosh &>/dev/null; then
-    $SUDO pamac install --no-confirm mongosh-bin
+    sudo pamac install --no-confirm mongosh-bin
+    if command -v mongosh &>/dev/null; then
+        echo "→ MongoDB Shell successfully installed."
+    else
+        echo "→ Failed to install MongoDB Shell."
+        exit 1
+    fi
 else
-    echo "→ mongosh already installed."
+    echo "→ MongoDB Shell already installed."
 fi
 
 # ----------------------------------------------------------
@@ -247,10 +371,17 @@ fi
 # ----------------------------------------------------------
 echo "[22/23] Installing SQLite..."
 if ! command -v sqlite3 &>/dev/null; then
-    $SUDO pacman -S --noconfirm sqlite
+    sudo pacman -S --noconfirm sqlite
+    if command -v sqlite3 &>/dev/null; then
+        echo "→ SQLite successfully installed."
+    else
+        echo "→ Failed to install SQLite."
+        exit 1
+    fi
 else
     echo "→ SQLite already installed."
 fi
+
 
 echo ""
 echo "===================================================================="
